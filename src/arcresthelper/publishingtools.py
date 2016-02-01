@@ -17,7 +17,7 @@ import arcresthelper.common as common
 import gc
 import sys
 
-from six.moves import urllib_parse as urlparse
+from packages.six.moves import urllib_parse as urlparse
 
 try:
     import pyparsing
@@ -158,7 +158,7 @@ class publishingtools(securityhandlerhelper):
 
             return item_results
 
-        except common.ArcRestHelperError,e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -181,7 +181,7 @@ class publishingtools(securityhandlerhelper):
             del admin
 
             gc.collect()
-    #----------------------------------------------------------------------
+     #----------------------------------------------------------------------
     def _publishItems(self,config):
         name = None
         tags = None
@@ -211,7 +211,7 @@ class publishingtools(securityhandlerhelper):
         group_ids = None
         shareResults = None
         updateParams = None
-
+        url = None
         resultItem = {}
         try:
             name = ''
@@ -222,6 +222,9 @@ class publishingtools(securityhandlerhelper):
 
             if config.has_key('Data'):
                 itemData = config['Data']
+
+            if config.has_key('Url'):
+                url = config['Url']
 
             name = config['Title']
 
@@ -300,32 +303,39 @@ class publishingtools(securityhandlerhelper):
                     return resultItem
 
                 results = item.updateItem(itemParameters=itemParams,
-                                            data=itemData)
+                                          data=itemData,serviceUrl=url)
                 if 'error' in results:
                     return results
+                if item.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=item.id,folder=folderId)
+
             else:
                 try:
                     item = userInfo.addItem(itemParameters=itemParams,
-                            overwrite=True,
-                            url=None,
-                            relationshipType=None,
-                            originItemId=None,
-                            destinationItemId=None,
-                            serviceProxyParams=None,
-                            metadata=None,
-                            filePath=itemData)
-                    group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                    shareResults = userInfo.shareItems(items=item.id,
-                                                       groups=','.join(group_ids),
-                                                       everyone=everyone,
-                                                       org=org)
+                                            overwrite=True,
+                                            url=url,
+                                            relationshipType=None,
+                                            originItemId=None,
+                                            destinationItemId=None,
+                                            serviceProxyParams=None,
+                                            metadata=None,
+                                            filePath=itemData)
+
                     #updateParams = arcrest.manageorg.ItemParameter()
                     #updateParams.title = name
                     #updateResults = item.updateItem(itemParameters=updateParams)
-                except Exception,e:
+                except Exception as e:
                     print (e)
             if item is None:
                 return "Item could not be added"
+
+            group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+            shareResults = userInfo.shareItems(items=item.id,
+                                               groups=','.join(group_ids),
+                                               everyone=everyone,
+                                               org=org)
 
             resultItem['itemId'] = item.id
             resultItem['url'] = item.item._curl + "/data"
@@ -476,7 +486,7 @@ class publishingtools(securityhandlerhelper):
                 print ("%s webmap created" % itemInfo['MapInfo']['Name'])
             return map_results
 
-        except common.ArcRestHelperError,e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -913,6 +923,10 @@ class publishingtools(securityhandlerhelper):
                                             text=json.dumps(webmap_data))
                 if 'error' in results:
                     return results
+                if item.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=item.id,folder=folderId)
             else:
                 try:
                     item = userInfo.addItem(itemParameters=itemParams,
@@ -924,19 +938,20 @@ class publishingtools(securityhandlerhelper):
                             serviceProxyParams=None,
                             metadata=None,
                             text=json.dumps(webmap_data))
-                    group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                    shareResults = userInfo.shareItems(items=item.id,
-                                                       groups=','.join(group_ids),
-                                                       everyone=everyone,
-                                                       org=org)
-                    updateParams = arcrest.manageorg.ItemParameter()
-                    updateParams.title = name
-                    updateResults = item.updateItem(itemParameters=updateParams)
-                except Exception,e:
+
+                except Exception as e:
                     print (e)
             if item is None:
                 return "Item could not be added"
 
+            group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+            shareResults = userInfo.shareItems(items=item.id,
+                                               groups=','.join(group_ids),
+                                               everyone=everyone,
+                                               org=org)
+            updateParams = arcrest.manageorg.ItemParameter()
+            updateParams.title = name
+            updateResults = item.updateItem(itemParameters=updateParams)
 
             resultMap['Results']['itemId'] = item.id
             resultMap['folderId'] = folderId
@@ -1198,7 +1213,7 @@ class publishingtools(securityhandlerhelper):
                     print (str(resItm['FSInfo']))
 
             return res
-        except common.ArcRestHelperError,e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -1258,7 +1273,7 @@ class publishingtools(securityhandlerhelper):
 
             return res
 
-        except common.ArcRestHelperError,e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -1383,6 +1398,10 @@ class publishingtools(securityhandlerhelper):
 
 
             admin = arcrest.manageorg.Administration(securityHandler=self.securityhandler)
+            hostingServers = admin.hostingServers()
+            if len(hostingServers) == 0:
+                return "No hosting servers can be found, if this is portal, update the settings to include a hosting server."
+
             content = admin.content
             userInfo = content.users.user()
             userCommunity = admin.community
@@ -1458,6 +1477,10 @@ class publishingtools(securityhandlerhelper):
 
 
             itemParams = arcrest.manageorg.ItemParameter()
+            #if isinstance(hostingServers[0],arcrest.manageags.administration.AGSAdministration):
+                #itemParams.title = service_name_safe
+            #else:
+                #itemParams.title = service_name
             itemParams.title = service_name
             itemParams.thumbnail = thumbnail
             itemParams.type = searchType
@@ -1465,27 +1488,32 @@ class publishingtools(securityhandlerhelper):
 
             sea = arcrest.find.search(securityHandler=self._securityHandler)
             items = sea.findItem(title=service_name, itemType=searchType,searchorg=False)
-
+            defItem = None
+            defItemID = None
             if items['total'] >= 1:
                 for res in items['results']:
                     if 'type' in res and res['type'] == searchType:
                         if 'name' in res and res['name'] == service_name:
-                            itemId = res['id']
+                            defItemID = res['id']
                             break
                         if 'title' in res and res['title'] == service_name:
-                            itemId = res['id']
+                            defItemID = res['id']
                             break
                 #itemId = items['results'][0]['id']
 
-            defItem = None
 
-            if not itemId is None:
-                defItem = content.getItem(itemId).userItem
+
+            if not defItemID is None:
+                defItem = content.getItem(defItemID).userItem
 
                 resultSD = defItem.updateItem(itemParameters=itemParams,
                                             data=sd_Info['servicedef'])
                 if 'error' in resultSD:
                     return resultSD
+                if defItem.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=defItem.id,folder=folderId)
 
             else:
                 try:
@@ -1499,7 +1527,7 @@ class publishingtools(securityhandlerhelper):
                             destinationItemId=None,
                             serviceProxyParams=None,
                             metadata=None)
-                except Exception,e:
+                except Exception as e:
                     print (e)
                 if defItem is None:
                     return "Item could not be added "
@@ -1512,8 +1540,8 @@ class publishingtools(securityhandlerhelper):
                     publishParameters=publishParameters,
                     overwrite = True,
                     wait=True)
-            except Exception, e:
-                print ("Overwrite failed")
+            except Exception as e:
+                print ("Error publishing item: Error Details: {0}".format(str(e)))
 
                 sea = arcrest.find.search(securityHandler=self._securityHandler)
                 items = sea.findItem(title =service_name, itemType='Feature Service',searchorg=False)
@@ -1584,7 +1612,7 @@ class publishingtools(securityhandlerhelper):
                 else:
                     print ("Item exist and cannot be found, probably owned by another user.")
                     raise common.ArcRestHelperError({
-                        "function": "_publishFsFromConfig",
+                        "function": "_publishFsFromMXD",
                         "line": lineno(),
                         "filename":  'publishingtools.py',
                         "synerror": "Item exist and cannot be found, probably owned by another user."
@@ -1598,7 +1626,7 @@ class publishingtools(securityhandlerhelper):
                         overwrite = True,
                         publishParameters=publishParameters,
                         wait=True)
-                except Exception, e:
+                except Exception as e:
 
                     print ("Overwrite failed, deleting")
                     delres = userInfo.deleteItems(items=existingItem.id)
@@ -1614,7 +1642,7 @@ class publishingtools(securityhandlerhelper):
                             overwrite = True,
                             publishParameters=publishParameters,
                             wait=True)
-                    except Exception, e:
+                    except Exception as e:
                         return e
 
             results = {
@@ -1675,7 +1703,7 @@ class publishingtools(securityhandlerhelper):
 
 
             if definition is not None:
-                
+
                 enableResults = adminFS.updateDefinition(json_dict=definition)
                 if enableResults is not None and 'error' in enableResults:
                     results['messages'] = enableResults
@@ -1683,14 +1711,14 @@ class publishingtools(securityhandlerhelper):
                     if 'editorTrackingInfo' in definition:
                         if 'enableEditorTracking' in definition['editorTrackingInfo']:
                             if definition['editorTrackingInfo']['enableEditorTracking'] == True:
-                    
+
                                 json_dict = {'editFieldsInfo':{}}
-                    
+
                                 json_dict['editFieldsInfo']['creationDateField'] = ""
                                 json_dict['editFieldsInfo']['creatorField'] = ""
                                 json_dict['editFieldsInfo']['editDateField'] = ""
                                 json_dict['editFieldsInfo']['editorField'] = ""
-                    
+
                                 layers = adminFS.layers
                                 tables = adminFS.tables
                                 for layer in layers:
@@ -1698,7 +1726,7 @@ class publishingtools(securityhandlerhelper):
                                         if layer.editFieldsInfo is None:
                                             layUpdateResult = layer.addToDefinition(json_dict=json_dict)
                                             if 'error' in layUpdateResult:
-                    
+
                                                 layUpdateResult['error']['layerid'] = layer.id
                                                 results['messages'] = layUpdateResult['error']
                                 if not tables is None:
@@ -1707,9 +1735,9 @@ class publishingtools(securityhandlerhelper):
                                             if layer.editFieldsInfo is None:
                                                 layUpdateResult = layer.addToDefinition(json_dict=json_dict)
                                                 if 'error' in layUpdateResult:
-                    
+
                                                     layUpdateResult['error']['layerid'] = layer.id
-                                                    results['messages'] = layUpdateResult['error']                    
+                                                    results['messages'] = layUpdateResult['error']
 
             return results
 
@@ -1717,7 +1745,7 @@ class publishingtools(securityhandlerhelper):
 
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
-                "function": "_publishFsFromConfig",
+                "function": "_publishFsFromMXD",
                 "line": line,
                 "filename":  filename,
                 "synerror": synerror,
@@ -1832,7 +1860,7 @@ class publishingtools(securityhandlerhelper):
                             if fsDet.has_key('ReplaceTag'):
                                 if 'ReplaceString' in replaceItem:
                                     if fsDet is not None and replaceItem['ReplaceString'] == fsDet['ReplaceTag'] and \
-                                       replaceItem['ReplaceType'] == 'Service':
+                                       (replaceItem['ReplaceType'] == 'Service' or replaceItem['ReplaceType'] == 'Layer'):
                                         replaceItem['ReplaceString'] = fsDet['FSInfo']['url']
                                         replaceItem['ItemID'] = fsDet['FSInfo']['itemId']
                                         replaceItem['ItemFolder'] = fsDet['FSInfo']['folderId']
@@ -1853,7 +1881,7 @@ class publishingtools(securityhandlerhelper):
                                         repInfo = replaceItem['ReplaceString'].split("|")
                                         if len(repInfo) == 2:
                                             if repInfo[0] == mapDet['ReplaceTag']:
-                                                for key,value in mapDet['MapInfo']['Layers'].iteritems():
+                                                for key,value in mapDet['MapInfo']['Layers'].items():
                                                     if value["Name"] == repInfo[1]:
                                                         replaceItem['ReplaceString'] = value["ID"]
 
@@ -1895,7 +1923,7 @@ class publishingtools(securityhandlerhelper):
                 print ("App was not created")
             return itemInfo
 
-        except common.ArcRestHelperError, e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -1936,7 +1964,7 @@ class publishingtools(securityhandlerhelper):
                 app_results.append(self._publishAppLogic(appDet=app_info,map_info=map_info,fsInfo=fsInfo))
             return app_results
 
-        except (common.ArcRestHelperError), e:
+        except (common.ArcRestHelperError) as e:
             raise e
         except Exception as e:
 
@@ -2126,6 +2154,10 @@ class publishingtools(securityhandlerhelper):
 
                 if 'error' in results:
                     return results
+                if item.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=item.id,folder=folderId)
             else:
                 try:
                     item = userInfo.addItem(
@@ -2138,25 +2170,30 @@ class publishingtools(securityhandlerhelper):
                             metadata=None,
                             text=json.dumps(itemData))
 
-                    group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
-                    shareResults = userInfo.shareItems(items=item.id,
-                                                       groups=','.join(group_ids),
-                                                       everyone=everyone,
-                                                       org=org)
-                    updateParams = arcrest.manageorg.ItemParameter()
-                    updateParams.title = name
 
-                    url = url.replace("{AppID}",item.id)
-                    url = url.replace("{OrgURL}",orgURL)
-                    #if portalself.urlKey is None or portalself.customBaseUrl is None:
-                        #parsedURL = urlparse.urlparse(url=self._securityHandler.org_url, scheme='', allow_fragments=True)
-
-                    #else:
-                        #url = url.replace("{OrgURL}", portalself.urlKey + '.' +  portalself.customBaseUrl)
-                    updateParams.url = url
-                    updateResults = item.updateItem(itemParameters=updateParams)
-                except Exception,e:
+                except Exception as e:
                     print (e)
+            if item is None:
+                return "App could not be added"
+
+            group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
+            shareResults = userInfo.shareItems(items=item.id,
+                                               groups=','.join(group_ids),
+                                               everyone=everyone,
+                                               org=org)
+            updateParams = arcrest.manageorg.ItemParameter()
+            updateParams.title = name
+
+            url = url.replace("{AppID}",item.id)
+            url = url.replace("{OrgURL}",orgURL)
+            #if portalself.urlKey is None or portalself.customBaseUrl is None:
+                            #parsedURL = urlparse.urlparse(url=self._securityHandler.org_url, scheme='', allow_fragments=True)
+
+            #else:
+                            #url = url.replace("{OrgURL}", portalself.urlKey + '.' +  portalself.customBaseUrl)
+            updateParams.url = url
+            updateResults = item.updateItem(itemParameters=updateParams)
+
             resultApp['Results']['itemId'] = item.id
             resultApp['folderId'] = folderId
             resultApp['Name'] = name
@@ -2401,7 +2438,7 @@ class publishingtools(securityhandlerhelper):
                                                                                     #old=field['PublishName'],
                                                                                     #new=field['ConvertName'])
                                                                     dataSource['filter']['whereClause'] = " ".join(whereElements)
-                                                                except select_parser.ParseException, pe:
+                                                                except select_parser.ParseException as pe:
                                                                     for field in dataSourceIDToFields[dataSource['parentDataSourceId']]['FieldInfo']['fields']:
                                                                         if whercla.contains(field['PublishName']):
                                                                             whercla = whercla.replace(
@@ -2485,6 +2522,10 @@ class publishingtools(securityhandlerhelper):
                                                        text=json.dumps(itemData))
                 if 'error' in results:
                     return results
+                if item.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=item.id,folder=folderId)
             else:
                 try:
 
@@ -2496,9 +2537,11 @@ class publishingtools(securityhandlerhelper):
                         serviceProxyParams=None,
                         metadata=None,
                         text=json.dumps(itemData))
-                except Exception,e:
+                except Exception as e:
                     print (e)
 
+            if item is None:
+                return "Dashboard could not be added"
             group_ids = userCommunity.getGroupIDs(groupNames=groupNames)
             shareResults = userInfo.shareItems(items=item.id,
                                                groups=','.join(group_ids),
@@ -2640,18 +2683,35 @@ class publishingtools(securityhandlerhelper):
 
             if isinstance(efs_config, list):
                 for ext_service in efs_config:
+                    fURL = None
+                    cs = 0
+                    try:
+                        if 'ChunkSize' in ext_service:
+                            if common.is_number(ext_service['ChunkSize']):
+                                cs = ext_service['ChunkSize']
+                    except Exception as e:
+                        pass
                     resItm={"DeleteDetails": None,"AddDetails":None}
-                    fURL = ext_service['URL']
+                    if 'ItemId' in ext_service and 'LayerName' in ext_service:
+                        fs = fst.GetFeatureService(itemId=ext_service['ItemId'],returnURLOnly=False)
+                        if not fs is None:
+                            fURL = fst.GetLayerFromFeatureService(fs=fs,layerName=ext_service['LayerName'],returnURLOnly=True)
+                    if fURL is None and 'URL' in ext_service:
+
+                        fURL = ext_service['URL']
+                    if fURL is None:
+                        print("Item and layer not found or URL not in config")
+                        continue
 
                     if 'DeleteInfo' in ext_service:
                         if str(ext_service['DeleteInfo']['Delete']).upper() == "TRUE":
-                            resItm['DeleteDetails'] = fst.DeleteFeaturesFromFeatureLayer(url=fURL, sql=ext_service['DeleteInfo']['DeleteSQL'])
+                            resItm['DeleteDetails'] = fst.DeleteFeaturesFromFeatureLayer(url=fURL, sql=ext_service['DeleteInfo']['DeleteSQL'],chunksize=cs)
                             if not 'error' in resItm['DeleteDetails'] :
                                 print ("Delete Successful: %s" % fURL)
                             else:
                                 print (str(resItm['DeleteDetails']))
 
-                    resItm['AddDetails'] = fst.AddFeaturesToFeatureLayer(url=fURL, pathToFeatureClass = ext_service['FeatureClass'])
+                    resItm['AddDetails'] = fst.AddFeaturesToFeatureLayer(url=fURL, pathToFeatureClass = ext_service['FeatureClass'],chunksize=cs)
 
                     fsRes.append(resItm)
 
@@ -2663,16 +2723,32 @@ class publishingtools(securityhandlerhelper):
             else:
                 resItm={"DeleteDetails": None,"AddDetails":None}
                 fURL = efs_config['URL']
+                cs = 0
+                try:
+                    if 'ChunkSize' in efs_config:
+                        if common.is_number(efs_config['ChunkSize']):
+                            cs = efs_config['ChunkSize']
+                except Exception as e:
+                    pass
+                if 'ItemId' in efs_config and 'LayerName' in efs_config:
+                    fs = fst.GetFeatureService(itemId=efs_config['ItemId'],returnURLOnly=False)
+                    if not fs is None:
+                        fURL = fst.GetLayerFromFeatureService(fs=fs,layerName=efs_config['LayerName'],returnURLOnly=True)
+                if fURL is None and 'URL' in efs_config:
 
+                    fURL = efs_config['URL']
+                if fURL is None:
+                    print("Item and layer not found or URL not in config")
+                    return None
                 if 'DeleteInfo' in efs_config:
                     if str(efs_config['DeleteInfo']['Delete']).upper() == "TRUE":
-                        resItm['DeleteDetails'] = fst.DeleteFeaturesFromFeatureLayer(url=fURL, sql=efs_config['DeleteInfo']['DeleteSQL'])
+                        resItm['DeleteDetails'] = fst.DeleteFeaturesFromFeatureLayer(url=fURL, sql=efs_config['DeleteInfo']['DeleteSQL'],chunksize=cs)
                         if not 'error' in resItm['DeleteDetails'] :
                             print ("            Delete Successful: %s" % fURL)
                         else:
                             print ("            " + str(resItm['DeleteDetails']))
 
-                resItm['AddDetails'] = fst.AddFeaturesToFeatureLayer(url=fURL, pathToFeatureClass = efs_config['FeatureClass'])
+                resItm['AddDetails'] = fst.AddFeaturesToFeatureLayer(url=fURL, pathToFeatureClass = efs_config['FeatureClass'],chunksize=cs)
 
                 fsRes.append(resItm)
 
@@ -2683,7 +2759,7 @@ class publishingtools(securityhandlerhelper):
 
             return fsRes
 
-        except common.ArcRestHelperError,e:
+        except common.ArcRestHelperError as e:
             raise e
         except Exception as e:
 
@@ -2906,7 +2982,10 @@ class publishingtools(securityhandlerhelper):
                 item = content.getItem(itemId).userItem
                 resultSD = item.updateItem(itemParameters=itemParams,
                                            text=fcJson)
-
+                if item.ownerFolder != folderId:
+                    if folderId is None:
+                        folderId = "/"
+                    moveRes = userInfo.moveItems(items=item.id,folder=folderId)
             else:
 
                 resultSD = userInfo.addItem(itemParameters=itemParams,
@@ -2954,7 +3033,7 @@ class publishingtools(securityhandlerhelper):
 
 
 
-        except common.ArcRestHelperError, e:
+        except common.ArcRestHelperError as e:
             raise e
 
         except Exception as e:

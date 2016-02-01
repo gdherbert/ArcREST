@@ -3,11 +3,12 @@ from __future__ import print_function
 import os
 import json
 import uuid
-from six.moves import urllib_parse as urlparse
+from ..packages.six.moves import urllib_parse as urlparse
 from .._abstract.abstract import BaseAGSServer
 from ..security import security
 from .._abstract.abstract import DynamicData, DataSource
-from ..common.spatial import scratchFolder, json_to_featureclass
+from ..common.spatial import scratchFolder, json_to_featureclass, \
+    featureclass_to_json
 from ..common import filters
 from ..common.general import _date_handler, Feature, FeatureSet
 ########################################################################
@@ -65,6 +66,7 @@ class FeatureLayer(BaseAGSServer):
     _proxy_port = None
     _json = None
     _advancedQueryCapabilities = None
+    _indexes = None
     #----------------------------------------------------------------------
     def __init__(self, url, securityHandler=None,
                  initialize=False,
@@ -99,7 +101,7 @@ class FeatureLayer(BaseAGSServer):
     def __init(self):
         """ inializes the properties """
         params = {"f" : "json"}
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -112,6 +114,13 @@ class FeatureLayer(BaseAGSServer):
                 setattr(self, "_"+ k, v)
             else:
                 print("%s - attribute not implemented for layer.FeatureLayer." % k)
+    #----------------------------------------------------------------------
+    @property
+    def indexes(self):
+        """ gets the indexes for the Featurelayer object"""
+        if self._indexes is None:
+            self.__init()
+        return self._indexes
     #----------------------------------------------------------------------
     @property
     def advancedQueryCapabilities(self):
@@ -430,11 +439,119 @@ class FeatureLayer(BaseAGSServer):
                                             default=_date_handler)
         else:
             return None
-        return self._do_post(url=url,
+        return self._post(url=url,
                              securityHandler=self._securityHandler,
                              param_dict=params, proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+
     #----------------------------------------------------------------------
+    def _chunks(self, l, n):
+        """ Yield n successive chunks from a list l.
+        """
+        l.sort()
+        newn = int(1.0 * len(l) / n + 0.5)
+        for i in xrange(0, n-1):
+            yield l[i*newn:i*newn+newn]
+        yield l[n*newn-newn:]
+    #----------------------------------------------------------------------
+    def addFeatures(self, fc, attachmentTable=None,
+                    nameField="ATT_NAME", blobField="DATA",
+                    contentTypeField="CONTENT_TYPE",
+                    rel_object_field="REL_OBJECTID",
+                    lowerCaseFieldNames=False):
+        """ adds a feature to the feature service
+           Inputs:
+              fc - string - path to feature class data to add.
+              attachmentTable - string - (optional) path to attachment table
+              nameField - string - (optional) name of file field in attachment table
+              blobField - string - (optional) name field containing blob data
+              contentTypeField - string - (optional) name of field containing content type
+              rel_object_field - string - (optional) name of field with OID of feature class
+           Output:
+              boolean, add results message as list of dictionaries
+
+        """
+        messages = {'addResults':[]}
+
+        if attachmentTable is None:
+            count = 0
+            bins = 1
+            uURL = self._url + "/addFeatures"
+            max_chunk = 250
+            js = json.loads(self._unicode_convert(
+                featureclass_to_json(fc)))
+            js = js['features']
+            if lowerCaseFieldNames == True:
+                for feat in js:
+                    feat['attributes'] = dict((k.lower(), v) for k,v in feat['attributes'].items())
+            if len(js) == 0:
+                return {'addResults':None}
+            if len(js) <= max_chunk:
+                bins = 1
+            else:
+                bins = int(len(js)/max_chunk)
+                if len(js) % max_chunk > 0:
+                    bins += 1
+            chunks = self._chunks(l=js, n=bins)
+            for chunk in chunks:
+                params = {
+                    "f" : 'json',
+                    "features"  : json.dumps(chunk,
+                                             default=_date_handler)
+                }
+
+                result = self._post(url=uURL, param_dict=params,
+                                       securityHandler=self._securityHandler,
+                                       proxy_port=self._proxy_port,
+                                       proxy_url=self._proxy_url)
+                if messages is None:
+                    messages = result
+                else:
+                    if 'addResults' in result:
+                        if 'addResults' in messages:
+                            messages['addResults'] = messages['addResults'] + result['addResults']
+                        else:
+                            messages['addResults'] = result['addResults']
+                    else:
+                        messages['errors'] = result
+
+                del params
+                del result
+            return messages
+        else:
+            oid_field = get_OID_field(fc)
+            OIDs = get_records_with_attachments(attachment_table=attachmentTable)
+            fl = create_feature_layer(fc, "%s not in ( %s )" % (oid_field, ",".join(OIDs)))
+            result = self.addFeatures(fl)
+            if result is not None:
+                messages.update(result)
+            del fl
+            for oid in OIDs:
+                fl = create_feature_layer(fc, "%s = %s" % (oid_field, oid), name="layer%s" % oid)
+                msgs = self.addFeatures(fl)
+                for result in msgs['addResults']:
+                    oid_fs = result['objectId']
+                    sends = get_attachment_data(attachmentTable, sql="%s = %s" % (rel_object_field, oid))
+                    result['addAttachmentResults'] = []
+                    for s in sends:
+                        attRes = self.addAttachment(oid_fs, s['blob'])
+
+                        if 'addAttachmentResult' in attRes:
+                            attRes['addAttachmentResult']['AttachmentName'] = s['name']
+                            result['addAttachmentResults'].append(attRes['addAttachmentResult'])
+                        else:
+                            attRes['AttachmentName'] = s['name']
+                            result['addAttachmentResults'].append(attRes)
+                        del s
+                    del sends
+                    del result
+                messages.update( msgs)
+                del fl
+                del oid
+            del OIDs
+            return messages
+    #----------------------------------------------------------------------
+
     def addAttachments(self,
                        featureId,
                        attachment,
@@ -481,19 +598,14 @@ class FeatureLayer(BaseAGSServer):
                 params['uploadId'] = uploadId
             if not gdbVersion is None:
                 params['gdbVersion'] = gdbVersion
-            parsed = urlparse(url)
-            files = []
-            files.append(('attachment', attachment, os.path.basename(attachment)))
-            res = self._post_multipart(host=parsed.hostname,
-                                       selector=parsed.path,
-                                       files=files,
-                                       fields=params,
-                                       port=parsed.port,
-                                       securityHandler=self._securityHandler,
-                                       ssl=parsed.scheme.lower() == 'https',
-                                       proxy_url=self._proxy_url,
-                                       proxy_port=self._proxy_port)
-            return self._unicode_convert(res)
+            files = {}
+            files['attachment'] = attachment
+            return self._post(url=url,
+                              param_dict=params,
+                              files=files,
+                              securityHandler=self._securityHandler,
+                              proxy_url=self._proxy_url,
+                              proxy_port=self._proxy_port)
         else:
             return "Attachments are not supported for this feature service."
     #----------------------------------------------------------------------
@@ -546,7 +658,7 @@ class FeatureLayer(BaseAGSServer):
         if objectIds is not None and \
            objectIds != "":
             params['objectIds'] = objectIds
-        result = self._do_post(url=dURL, param_dict=params,
+        result = self._post(url=dURL, param_dict=params,
                                securityHandler=self._securityHandler,
                                proxy_port=self._proxy_port,
                                proxy_url=self._proxy_url)
@@ -603,7 +715,7 @@ class FeatureLayer(BaseAGSServer):
         if deleteFeatures is not None and \
            isinstance(deleteFeatures, str):
             params['deletes'] = deleteFeatures
-        return self._do_post(url=editURL, param_dict=params,
+        return self._post(url=editURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -640,7 +752,7 @@ class FeatureLayer(BaseAGSServer):
         else:
             return {'message' : "invalid inputs"}
         updateURL = self._url + "/updateFeatures"
-        res = self._do_post(url=updateURL,
+        res = self._post(url=updateURL,
                             securityHandler=self._securityHandler,
                             param_dict=params, proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
@@ -738,7 +850,7 @@ class FeatureLayer(BaseAGSServer):
            isinstance(statisticFilter, filters.StatisticFilter):
             params['outStatistics'] = statisticFilter.filter
         fURL = self._url + "/query"
-        results = self._do_post(fURL, params,
+        results = self._post(fURL, params,
                                securityHandler=self._securityHandler,
                                proxy_port=self._proxy_port,
                                proxy_url=self._proxy_url)
@@ -817,7 +929,7 @@ class FeatureLayer(BaseAGSServer):
             params['sqlFormat'] = sqlFormat.lower()
         else:
             params['sqlFormat'] = "standard"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
@@ -860,7 +972,7 @@ class FeatureLayer(BaseAGSServer):
             "sql" : sql,
             "sqlType" : sqlType
         }
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -897,7 +1009,7 @@ class GroupLayer(FeatureLayer):
         }
         if self._securityHandler is not None:
             params['token'] = self._securityHandler.token
-        json_dict = json.loads(self._do_get(self._url, params,
+        json_dict = json.loads(self._get(self._url, params,
                                             securityHandler=self._securityHandler,
                                             proxy_url=self._proxy_url,
                                             proxy_port=self._proxy_port))

@@ -7,9 +7,12 @@ dateTimeFormat = '%Y-%m-%d %H:%M'
 import arcrest
 from arcrest.agol import FeatureLayer
 from arcrest.agol import FeatureService
+from arcrest.ags import FeatureService
+
 from arcrest.hostedservice import AdminFeatureService
 from arcrest.common.spatial import scratchFolder, scratchGDB, json_to_featureclass
 from arcrest.common.general import FeatureSet
+from arcresthelper.common import chunklist
 
 import datetime, time
 import json
@@ -242,9 +245,14 @@ class featureservicetools(securityhandlerhelper):
                 if returnURLOnly:
                     return item.url
                 else:
-                    return FeatureService(
+                    fs = arcrest.agol.FeatureService(
                        url=item.url,
                        securityHandler=self._securityHandler)
+                    if fs.layers is None or len(fs.layers) == 0 :
+                        fs = arcrest.ags.FeatureService(
+                           url=item.url)
+                    return fs
+
             return None
 
         except:
@@ -267,7 +275,7 @@ class featureservicetools(securityhandlerhelper):
     def GetLayerFromFeatureServiceByURL(self,url,layerName="",returnURLOnly=False):
         fs = None
         try:
-            fs = FeatureService(
+            fs = arcrest.agol.FeatureService(
                     url=url,
                     securityHandler=self._securityHandler)
 
@@ -296,23 +304,29 @@ class featureservicetools(securityhandlerhelper):
         sublayer = None
         try:
             layers = fs.layers
-            for layer in layers:
-                if layer.name == layerName:
-                    if returnURLOnly:
-                        return fs.url + '/' + str(layer.id)
-                    else:
-                        return layer
+            if (layers is None or len(layers) == 0) and fs.url is not None:
+                fs = arcrest.ags.FeatureService(
+                                    url=fs.url)
+                layers = fs.layers
+            if layers is not None:
+                for layer in layers:
+                    if layer.name == layerName:
+                        if returnURLOnly:
+                            return fs.url + '/' + str(layer.id)
+                        else:
+                            return layer
 
-                elif not layer.subLayers is None:
-                    for sublayer in layer.subLayers:
-                        if sublayer == layerName:
-                            return sublayer
-            for table in fs.tables:
-                if table.name == layerName:
-                    if returnURLOnly:
-                        return fs.url + '/' + str(layer.id)
-                    else:
-                        return table
+                    elif not layer.subLayers is None:
+                        for sublayer in layer.subLayers:
+                            if sublayer == layerName:
+                                return sublayer
+            if fs.tables is not None:
+                for table in fs.tables:
+                    if table.name == layerName:
+                        if returnURLOnly:
+                            return fs.url + '/' + str(layer.id)
+                        else:
+                            return table
             return None
 
         except:
@@ -337,7 +351,7 @@ class featureservicetools(securityhandlerhelper):
 
             gc.collect()
     #----------------------------------------------------------------------
-    def AddFeaturesToFeatureLayer(self,url,pathToFeatureClass,chunksize=0):
+    def AddFeaturesToFeatureLayer(self,url,pathToFeatureClass,chunksize=0,lowerCaseFieldNames=False):
         if arcpyFound == False:
             raise common.ArcRestHelperError({
                 "function": "AddFeaturesToFeatureLayer",
@@ -359,29 +373,25 @@ class featureservicetools(securityhandlerhelper):
                     return "0 features in %s" % pathToFeatureClass
                 arcpy.env.overwriteOutput = True
                 if int(total) < int(chunksize):
-                    return fl.addFeatures(fc=pathToFeatureClass)
+                    return fl.addFeatures(fc=pathToFeatureClass,lowerCaseFieldNames=lowerCaseFieldNames)
                 else:
                     inDesc = arcpy.Describe(pathToFeatureClass)
                     oidName = arcpy.AddFieldDelimiters(pathToFeatureClass,inDesc.oidFieldName)
-                    sql = '%s = (select min(%s) from %s)' % (oidName,oidName,os.path.basename(pathToFeatureClass))
-                    cur = arcpy.da.SearchCursor(pathToFeatureClass,[inDesc.oidFieldName],sql)
-                    minOID = cur.next()[0]
-                    del cur, sql
-                    sql = '%s = (select max(%s) from %s)' % (oidName,oidName,os.path.basename(pathToFeatureClass))
-                    cur = arcpy.da.SearchCursor(pathToFeatureClass,[inDesc.oidFieldName],sql)
-                    maxOID = cur.next()[0]
-                    del cur, sql
-                    breaks = range(minOID,maxOID)[0:-1:chunksize]
+                    fc = os.path.basename(pathToFeatureClass)
+                    sql = "{0} IN ((SELECT MIN({0}) FROM {1}), (SELECT MAX({0}) FROM {1}))".format(oidName, fc)
+                    minOID,maxOID = list(zip(*arcpy.da.SearchCursor(pathToFeatureClass, "OID@", sql)))[0]
+                    breaks = list(range(minOID,maxOID))[0:-1:chunksize]
                     breaks.append(maxOID+1)
-                    exprList = [oidName + ' >= ' + str(breaks[b]) + ' and ' + \
-                                oidName + ' < ' + str(breaks[b+1]) for b in range(len(breaks)-1)]
+                    exprList = ["{0} >= {1} AND {0} < {2}".format(oidName, breaks[b], breaks[b+1])
+                                for b in range(len(breaks)-1)]
+
                     for expr in exprList:
                         UploadLayer = arcpy.MakeFeatureLayer_management(pathToFeatureClass, 'TEMPCOPY', expr).getOutput(0)
-                        result = fl.addFeatures(fc=UploadLayer)
+                        result = fl.addFeatures(fc=UploadLayer,lowerCaseFieldNames=lowerCaseFieldNames)
                         if messages is None:
                             messages = result
                         else:
-                            if 'addResults' in result:
+                            if result is not None and 'addResults' in result:
                                 if 'addResults' in messages:
                                     messages['addResults'] = messages['addResults'] + result['addResults']
                                     print ("%s/%s features added" % (len(messages['addResults']),total))
@@ -392,11 +402,11 @@ class featureservicetools(securityhandlerhelper):
                                 messages['errors'] = result
                 return messages
             else:
-                return fl.addFeatures(fc=pathToFeatureClass)
+                return fl.addFeatures(fc=pathToFeatureClass,lowerCaseFieldNames=lowerCaseFieldNames)
         except arcpy.ExecuteError:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
-                "function": "create_report_layers_using_config",
+                "function": "AddFeaturesToFeatureLayer",
                 "line": line,
                 "filename":  filename,
                 "synerror": synerror,
@@ -435,10 +445,7 @@ class featureservicetools(securityhandlerhelper):
                     oids = qRes['objectIds']
                     total = len(oids)
                     if total == 0:
-                        return  {'success':'true','message': "No features matched the query"}
-
-                    minId = min(oids)
-                    maxId = max(oids)
+                        return  {'success':True,'message': "No features matched the query"}
 
                     i = 0
                     print ("%s features to be deleted" % total)
@@ -454,7 +461,7 @@ class featureservicetools(securityhandlerhelper):
                             i += chunksize
                         else:
                             print (results)
-                            return {'success':'true','message': "%s deleted" % totalDeleted}
+                            return {'success':True,'message': "%s deleted" % totalDeleted}
                     qRes = fl.query(where=sql, returnIDsOnly=True)
                     if 'objectIds' in qRes:
                         oids = qRes['objectIds']
@@ -463,19 +470,20 @@ class featureservicetools(securityhandlerhelper):
                             results = fl.deleteFeatures(where=sql)
                             if 'deleteResults' in results:
                                 totalDeleted += len(results['deleteResults'])
-                                return  {'success':'true','message': "%s deleted" % totalDeleted}
+                                return  {'success':True,'message': "%s deleted" % totalDeleted}
                             else:
                                 return results
-                    return  {'success':'true','message': "%s deleted" % totalDeleted}
+                    return  {'success':True,'message': "%s deleted" % totalDeleted}
 
                 else:
                     print (qRes)
             else:
                 results = fl.deleteFeatures(where=sql)
-                if 'deleteResults' in results:
-                    return  {'success':'true','message': totalDeleted + len(results['deleteResults'])}
-                else:
-                    return results
+                if results is not None:
+                    if 'deleteResults' in results:
+                        return  {'success':True,'message': totalDeleted + len(results['deleteResults'])}
+                    else:
+                        return results
 
         except:
             line, filename, synerror = trace()
@@ -494,66 +502,53 @@ class featureservicetools(securityhandlerhelper):
             gc.collect()
 
     #----------------------------------------------------------------------
-    def QueryAllFeatures(self,url,sql,chunksize=0,saveLocation="",outName=""):
+    def QueryAllFeatures(self,url,sql,out_fields="*",chunksize=1000,saveLocation="",outName=""):
         fl = None
         try:
-            fl = FeatureLayer(
-                   url=url,
-                   securityHandler=self._securityHandler)
-            totalQueried = 0
-            if chunksize > 0:
-                qRes = fl.query(where=sql, returnIDsOnly=True)
-                if 'error' in qRes:
-                    print (qRes)
-                    return qRes
-                elif 'objectIds' in qRes:
-                    oids = qRes['objectIds']
-                    total = len(oids)
-                    if total == 0:
-                        return  {'success':'true','message': "No features matched the query"}
+            fl = FeatureLayer(url=url, securityHandler=self._securityHandler)
+            qRes = fl.query(where=sql, returnIDsOnly=True)
 
-                    minId = min(oids)
-                    maxId = max(oids)
+            if 'error' in qRes:
+                print (qRes)
+                return qRes
+            elif 'objectIds' in qRes:
+                oids = qRes['objectIds']
+                total = len(oids)
+                if total == 0:
+                    return  {'success':True, 'message':"No features matched the query"}
 
-                    i = 0
-                    print ("%s features to be downloaded" % total)
-                    combinedResults = None
-
-                    while(i <= len(oids)):
-                        oidsQuery = ','.join(str(e) for e in oids[i:i+chunksize])
-                        if oidsQuery == '':
-                            continue
-                        else:
-                            results = fl.query(objectIds=oidsQuery,
-                                               returnGeometry=True,
-                                               out_fields='*')
-                            if isinstance(results,FeatureSet):
-                                if combinedResults is None:
-                                    combinedResults = results
-                                else:
-
-                                    for feature in results.features:
-
-                                        combinedResults.features.append(feature)
-
-                                totalQueried += len(results.features)
-
-                                print ("%s%% Completed: %s/%s " % (int(totalQueried / float(total) *100), totalQueried, total))
-                                i += chunksize
+                print ("%s features to be downloaded" % total)
+                chunksize = min(chunksize, fl.maxRecordCount)
+                combinedResults = None
+                totalQueried = 0
+                for chunk in chunklist(l=oids, n=chunksize):
+                    oidsQuery = ",".join(map(str, chunk))
+                    if not oidsQuery:
+                        continue
+                    else:
+                        results = fl.query(objectIds=oidsQuery,
+                                           returnGeometry=True,
+                                           out_fields=out_fields)
+                        if isinstance(results,FeatureSet):
+                            if combinedResults is None:
+                                combinedResults = results
                             else:
-                                print (results)
+                                for feature in results.features:
+                                    combinedResults.features.append(feature)
 
-                    print (combinedResults.save(saveLocation=saveLocation, outName=outName))
+                            totalQueried += len(results.features)
+                            print("{:.0%} Completed: {}/{}".format(totalQueried / float(total), totalQueried, total))
+
+                        else:
+                            print (results)
+
+                if saveLocation == "" or outName == "":
+                    return combinedResults
                 else:
-                    print (qRes)
-            else:
-                return  fl.query(where=sql,
-                                 returnFeatureClass=True,
-                                 returnGeometry=True,
-                                 out_fields='*',
-                                 out_fc=os.path.join(saveLocation,outName)
-                                 )
+                    return combinedResults.save(saveLocation=saveLocation, outName=outName)
 
+            else:
+                print (qRes)
 
         except:
             line, filename, synerror = trace()

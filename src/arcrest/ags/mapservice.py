@@ -52,6 +52,7 @@ class MapService(BaseAGSServer):
     _securityHandler = None
     _proxy_url = None
     _proxy_port = None
+    _tileServers = None
     #----------------------------------------------------------------------
     def __init__(self, url, securityHandler=None,
                  initialize=False, proxy_url=None,
@@ -82,7 +83,7 @@ class MapService(BaseAGSServer):
             "f" : "json"
         }
         url = self._url + "/info/iteminfo"
-        return self._do_get(url=url, param_dict=params,
+        return self._get(url=url, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
@@ -93,8 +94,8 @@ class MapService(BaseAGSServer):
         params = {
 
         }
-        return self._download_file(url=url,
-                            save_path=outPath,
+        return self._get(url=url,
+                            out_folder=outPath,
                             file_name=None,
                             param_dict=params,
                             securityHandler=self._securityHandler,
@@ -106,13 +107,13 @@ class MapService(BaseAGSServer):
         fileName = "metadata.xml"
         url = self._url + "/info/metadata"
         params = {}
-        return self._download_file(url=url,
-                                   save_path=outPath,
-                                   file_name=fileName,
-                                   param_dict=params,
-                                   securityHandler=self._securityHandler,
-                                   proxy_url=self._proxy_url,
-                                   proxy_port=self._proxy_port)
+        return self._get(url=url,
+                         out_folder=outPath,
+                         file_name=fileName,
+                         param_dict=params,
+                         securityHandler=self._securityHandler,
+                         proxy_url=self._proxy_url,
+                         proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def __str__(self):
         """gets the object as as string"""
@@ -131,7 +132,7 @@ class MapService(BaseAGSServer):
         """ populates all the properties for the map service """
 
         params = {"f": "json"}
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
@@ -191,6 +192,13 @@ class MapService(BaseAGSServer):
             self.__init()
         for k,v in self._json_dict.items():
             yield [k,v]
+    #----------------------------------------------------------------------
+    @property
+    def tileServers(self):
+        """ gets the tileServers for the service"""
+        if self._tileServers is None:
+            self.__init()
+        return self._tileServers
     #----------------------------------------------------------------------
     @property
     def securityHandler(self):
@@ -411,7 +419,7 @@ class MapService(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        res = self._do_get(url, param_dict=params,
+        res = self._get(url, param_dict=params,
                            securityHandler=self._securityHandler,
                            proxy_url=self._proxy_url,
                            proxy_port=self._proxy_port)
@@ -464,7 +472,7 @@ class MapService(BaseAGSServer):
             "gdbVersion" : gdbVersion,
             "layers" : layers
         }
-        res = self._do_get(url, params,
+        res = self._get(url, params,
                            securityHandler=self._securityHandler,
                            proxy_url=self._proxy_url,
                            proxy_port=self._proxy_port)
@@ -478,7 +486,7 @@ class MapService(BaseAGSServer):
         params={
             "f" : "json"
         }
-        res = self._do_get(url=url, param_dict=params,
+        res = self._get(url=url, param_dict=params,
                            securityHandler=self._securityHandler,
                            proxy_url=self._proxy_url,
                            proxy_port=self._proxy_port)
@@ -500,7 +508,7 @@ class MapService(BaseAGSServer):
             }
         }
         return Feature(
-            json_string=self._do_get(url=url,
+            json_string=self._get(url=url,
                                      param_dict=params,
                                      securityHandler=self._securityHandler,
                                      proxy_port=self._proxy_port,
@@ -664,7 +672,7 @@ class MapService(BaseAGSServer):
             params['gdbVersion'] = gdbVersion
 
         identifyURL = self._url + "/identify"
-        return self._do_get(url=identifyURL,
+        return self._get(url=identifyURL,
                             param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
@@ -711,13 +719,13 @@ class MapService(BaseAGSServer):
         import urllib
         if len(params.keys()) > 0:
             url = kmlURL + "?%s" % urllib.urlencode(params)
-        return self._download_file(url=url,
-                                   save_path=save_location,
-                                   file_name=docName + ".kmz",
-                                   securityHandler=self._securityHandler,
-                                   proxy_url=self._proxy_url,
-                                   proxy_port=self._proxy_port
-                                   )
+        return self._get(url=url,
+                         out_folder=save_location,
+                         file_name=docName + ".kmz",
+                         securityHandler=self._securityHandler,
+                         proxy_url=self._proxy_url,
+                         proxy_port=self._proxy_port
+                         )
     #----------------------------------------------------------------------
     def exportMap(self,
                   bbox,
@@ -828,7 +836,7 @@ class MapService(BaseAGSServer):
             if mapScale is not None:
                 params['mapScale'] = mapScale
             exportURL = self._url + "/export"
-            return self._do_get(url=exportURL,
+            return self._get(url=exportURL,
                                 param_dict=params,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
@@ -909,13 +917,13 @@ class MapService(BaseAGSServer):
             else:
                 params['areaOfInterest'] = areaOfInterest
         if async == True:
-            return self._do_get(url=url,
+            return self._get(url=url,
                                 param_dict=params,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
                                 proxy_port=self._proxy_port)
         else:
-            exportJob = self._do_get(url=url,
+            exportJob = self._get(url=url,
                                      param_dict=params,
                                      securityHandler=self._securityHandler,
                                      proxy_url=self._proxy_url,
@@ -1038,11 +1046,11 @@ class MapService(BaseAGSServer):
             template = { "features": [geom]}
             params["areaOfInterest"] = template
         if async == True:
-            return self._do_get(url=url, param_dict=params,
+            return self._get(url=url, param_dict=params,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
         else:
-            exportJob = self._do_get(url=url, param_dict=params,
+            exportJob = self._get(url=url, param_dict=params,
                                      securityHandler=self._securityHandler,
                                      proxy_url=self._proxy_url,
                                      proxy_port=self._proxy_port)
@@ -1067,7 +1075,7 @@ class MapService(BaseAGSServer):
                     params = {
                         "f" : "json"
                     }
-                    gpRes = self._do_get(url=v['value'],
+                    gpRes = self._get(url=v['value'],
                                          param_dict=params,
                                          securityHandler=self._securityHandler,
                                          proxy_url=self._proxy_url,
@@ -1078,14 +1086,13 @@ class MapService(BaseAGSServer):
                             name = f['name']
                             dlURL = f['url']
                             files.append(
-                                self._download_file(url=dlURL,
-                                                    save_path=tempfile.gettempdir(),
-                                                    file_name=name,
-                                                    param_dict=params,
-                                                    securityHandler=self._securityHandler,
-                                                    proxy_url=self._proxy_url,
-                                                    proxy_port=self._proxy_port)
-                            )
+                                self._get(url=dlURL,
+                                          out_folder=tempfile.gettempdir(),
+                                          file_name=name,
+                                          param_dict=params,
+                                          securityHandler=self._securityHandler,
+                                          proxy_url=self._proxy_url,
+                                          proxy_port=self._proxy_port))
                         return files
                     else:
                         return gpRes['folders']

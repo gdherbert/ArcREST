@@ -66,7 +66,7 @@ class Services(BaseAGOLClass):
     def __init(self):
         """ initializes the service """
         params = {"f" : "json"}
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  proxy_port=self._proxy_port,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url)
@@ -149,7 +149,7 @@ class Services(BaseAGOLClass):
             uURL = self._url + "/services"
         else:
             uURL = self._url
-        res = self._do_get(url=uURL, param_dict=params,
+        res = self._get(url=uURL, param_dict=params,
                            securityHandler=self._securityHandler,
                            proxy_port=self._proxy_port,
                            proxy_url=self._proxy_url)
@@ -158,7 +158,7 @@ class Services(BaseAGOLClass):
                 for item in v:
                     if 'isDefault' in item and item['isDefault'] == False:
                         fURL = self._url + "/services/" + item['folderName']
-                        resFolder = self._do_get(url=fURL, param_dict=params,
+                        resFolder = self._get(url=fURL, param_dict=params,
                                                  securityHandler=self._securityHandler,
                                                  proxy_port=self._proxy_port,
                                                  proxy_url=self._proxy_url)
@@ -286,7 +286,7 @@ class AdminMapService(BaseAGOLClass):
         params = {
             "f" : "json",
         }
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
@@ -543,7 +543,7 @@ class AdminMapService(BaseAGOLClass):
             "serviceDefinition" : serviceDefinition
         }
 
-        res =  self._do_post(url=self._url,
+        res =  self._post(url=self._url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -565,7 +565,7 @@ class AdminMapService(BaseAGOLClass):
         params = {
             "f" : "json"
         }
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -582,7 +582,7 @@ class AdminMapService(BaseAGOLClass):
         params = {
             "f" : "json"
         }
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -623,7 +623,7 @@ class AdminMapService(BaseAGOLClass):
         if not maxExportTileCount is None:
             params["maxExportTileCount"] = int(maxExportTileCount)
         url = self._url + "/edit"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._securityHandler.proxy_url,
@@ -719,7 +719,7 @@ class AdminFeatureService(BaseAGOLClass):
             "f" : "json",
         }
 
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
@@ -814,7 +814,7 @@ class AdminFeatureService(BaseAGOLClass):
         params = {
             "f" : "json"
         }
-        return self._do_get(url=uURL, param_dict=params,
+        return self._get(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
@@ -823,7 +823,7 @@ class AdminFeatureService(BaseAGOLClass):
         """ refreshes a service """
         params = {"f": "json"}
         uURL = self._url + "/refresh"
-        res = self._do_get(url=uURL, param_dict=params,
+        res = self._get(url=uURL, param_dict=params,
                            securityHandler=self._securityHandler,
                            proxy_port=self._proxy_port,
                            proxy_url=self._proxy_url)
@@ -1046,7 +1046,7 @@ class AdminFeatureService(BaseAGOLClass):
             "async" : False
         }
         uURL = self._url + "/addToDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -1098,11 +1098,11 @@ class AdminFeatureService(BaseAGOLClass):
                     if 'allowOthersToQuery' in json_dict['editorTrackingInfo']:
                         definition['editorTrackingInfo']['allowOthersToQuery'] = json_dict['editorTrackingInfo']['allowOthersToQuery']
                     if isinstance(json_dict['editorTrackingInfo'],dict):
-                        for k,v in json_dict['editorTrackingInfo'].iteritems():
+                        for k,v in json_dict['editorTrackingInfo'].items():
                             if k not in definition['editorTrackingInfo']:
                                 definition['editorTrackingInfo'][k] = v
                 if isinstance(json_dict,dict):
-                    for k,v in json_dict.iteritems():
+                    for k,v in json_dict.items():
                         if k not in definition:
                             definition[k] = v
 
@@ -1112,7 +1112,7 @@ class AdminFeatureService(BaseAGOLClass):
             "async" : False
         }
         uURL = self._url + "/updateDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -1145,7 +1145,7 @@ class AdminFeatureService(BaseAGOLClass):
             "async" : False
         }
         uURL = self._url + "/deleteFromDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -1277,6 +1277,8 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
     _definitionQuery = None
     _zDefault = None
     _supportsApplyEditsWithGlobalIds = None
+    _supportsValidateSQL = None
+    _serviceItemId = None
     #----------------------------------------------------------------------
     def __init__(self, url,
                  securityHandler,
@@ -1321,6 +1323,16 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
             yield [k,v]
     #----------------------------------------------------------------------
     @property
+    def supportsValidateSQL (self):
+        """ returns the current security handler """
+        return self._supportsValidateSQL
+    #----------------------------------------------------------------------
+    @property
+    def serviceItemId(self):
+        """ returns the current security handler """
+        return self._serviceItemId
+    #----------------------------------------------------------------------
+    @property
     def securityHandler(self):
         """ returns the current security handler """
         return self._securityHandler
@@ -1339,7 +1351,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         params = {
             "f" : "json",
         }
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
                                  proxy_url=self._proxy_url)
@@ -1362,7 +1374,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         """ refreshes a service """
         params = {"f": "json"}
         uURL = self._url + "/refresh"
-        res = self._do_get(url=uURL, param_dict=params,
+        res = self._get(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
@@ -1799,7 +1811,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
             #"async" : False
         }
         uURL = self._url + "/addToDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -1828,7 +1840,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
         }
 
         uURL = self._url + "/updateDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -1860,7 +1872,7 @@ class AdminFeatureServiceLayer(BaseAGOLClass):
             "deleteFromDefinition" : json.dumps(json_dict)
         }
         uURL = self._url + "/deleteFromDefinition"
-        res = self._do_post(url=uURL, param_dict=params,
+        res = self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)

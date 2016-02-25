@@ -130,9 +130,14 @@ class Community(BaseAGOLClass):
         if communityInfo is None:
             communityInfo = self.communitySelf
 
+        if isinstance(groupNames,list):
+            groupNames = map(str.upper, groupNames)
+        else:
+            groupNames = groupNames.upper()
         if 'groups' in communityInfo:
             for gp in communityInfo['groups']:
-                if gp['title'] in groupNames:
+
+                if str(gp['title']).upper() in groupNames:
                     group_ids.append(gp['id'])
         del communityInfo
         return group_ids
@@ -1244,6 +1249,10 @@ class User(BaseAGOLClass):
     _preferredView = None
     _lastLogin = None
     _validateUserProfile = None
+    _assignedCredits = None
+    _availableCredits = None
+    _firstName = None
+    _lastName = None
     #----------------------------------------------------------------------
     def __init__(self,
                  url,
@@ -1311,6 +1320,32 @@ class User(BaseAGOLClass):
                     securityHandler=self._securityHandler,
                     proxy_url=self._proxy_url,
                     proxy_port=self._proxy_port)
+    @property
+    def lastName(self):
+        '''gets the property value for username'''
+        if self._lastName is None:
+            self.__init()
+        return self._lastName
+    @property
+    def firstName(self):
+        '''gets the property value for username'''
+        if self._firstName is None:
+            self.__init()
+        return self._firstName
+    #----------------------------------------------------------------------
+    @property
+    def assignedCredits(self):
+        """returns the assignedCredits value"""
+        if self._assignedCredits is None:
+            self.__init()
+        return self._assignedCredits
+    #----------------------------------------------------------------------
+    @property
+    def availableCredits(self):
+        """gets the availableCredits value"""
+        if self._availableCredits is None:
+            self.__init()
+        return self._availableCredits
     #----------------------------------------------------------------------
     @property
     def disabled(self):
@@ -1550,6 +1585,27 @@ class User(BaseAGOLClass):
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
+    def resetPassword(self, email=True):
+        """
+        resets a users password for an account.  The password will be randomly
+        generated and emailed by the system.
+
+        Input:
+           email - boolean that an email password will be sent to the
+                   user's profile email address.  The default is True.
+
+        """
+        url = self.root + "/reset"
+        params = {
+            "f" : "json",
+            "email" : email
+        }
+        return self._post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
     def expirePassword(self,
                        hours="now"):
         """sets a time when a user must reset their password"""
@@ -1621,7 +1677,8 @@ class User(BaseAGOLClass):
                securityQuestionIdx=None,
                securityAnswer=None,
                culture=None,
-               region=None
+               region=None,
+               userType=None
                ):
         """
         The Update User operation (POST only) modifies properties such as
@@ -1666,6 +1723,11 @@ class User(BaseAGOLClass):
                   browser/machine language setting.
         region - Specifies the region of featured maps and apps and the
                  basemap gallery.
+        userType - if the value is set to "both", then the value will allow
+                   users to access both ArcGIS Org and the forums from this
+                   account.  'arcgisorg' means the account is only valid
+                   for the organizational site.  This is an AGOL only
+                   parameter.
         """
         params = {
             "f" : "json"
@@ -1688,7 +1750,9 @@ class User(BaseAGOLClass):
             params['securityQuestionIdx'] = securityQuestionIdx
         if securityAnswer is not None:
             params['securityAnswer'] = securityAnswer
-
+        if userType is not None and \
+           userType.lower() in ['both', 'arcgisorg']:
+            params['userType'] = userType.lower()
         files = {}
 
 

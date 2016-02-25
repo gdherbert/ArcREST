@@ -5,8 +5,8 @@ import arcrest
 from arcrest.manageags import AGSAdministration
 from arcrest.manageorg import Administration
 from packages import six
-import six.moves.urllib as urllib
-from six.moves.urllib.error import HTTPError
+import packages.six.moves.urllib as urllib
+from packages.six.moves.urllib.error import HTTPError
 import os
 import common
 import copy
@@ -55,7 +55,7 @@ class securityhandlerhelper(object):
     _client_id = None
     _secret_id = None
     _is_portal = False
-    _supported_types = ['LDAP', 'NTLM', 'OAuth', 'Portal', 'PKI']
+    _supported_types = ['LDAP', 'NTLM', 'OAuth', 'Portal', 'PKI', "ArcGIS"]
 
     #----------------------------------------------------------------------
     def __init__(self, securityinfo):
@@ -123,7 +123,7 @@ class securityhandlerhelper(object):
                     self._message = 'Security type not supported: ' + self._security_type
                     self._valid = False
                     return
-                     
+
 
                 if 'proxy_url' in securityinfo:
                     self._proxy_url = securityinfo['proxy_url']
@@ -185,6 +185,7 @@ class securityhandlerhelper(object):
                                                                                      token_url=self._token_url,
                                                                                      proxy_url=self._proxy_url,
                                                                                      proxy_port=self._proxy_port)
+                            self._org_url = self._securityHandler.org_url
                             self._message = "ArcGIS Online security handler created"
                         else:
                             self._securityHandler = security.PortalTokenSecurityHandler(username=self._username,

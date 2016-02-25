@@ -1135,7 +1135,6 @@ class AGOLTokenSecurityHandler(abstract.BaseSecurityHandler):
     _expires_in = None
     _proxy_url = None
     _proxy_port = None
-
     #----------------------------------------------------------------------
     def __init__(self,
                  username,
@@ -1152,6 +1151,19 @@ class AGOLTokenSecurityHandler(abstract.BaseSecurityHandler):
         self._proxy_port = proxy_port
         self._proxy_url = proxy_url
         self._token_expires_on = datetime.datetime.now() + datetime.timedelta(seconds=_defaultTokenExpiration)
+
+        urlInfo = urlparse(org_url)
+
+        if str(urlInfo.netloc).lower() == "www.arcgis.com"> -1:
+            self._initURL(org_url=org_url,token_url=token_url)
+
+            from ..manageorg import Administration
+            admin = Administration(securityHandler=self)
+            portalSelf = admin.portals.portalSelf
+            urlInfo=urlInfo._replace(netloc= "%s.%s" % (portalSelf.urlKey, portalSelf.customBaseUrl))
+            org_url = urlunparse(urlInfo)
+            del portalSelf
+            del admin
         self._initURL(org_url=org_url,token_url=token_url)
     #----------------------------------------------------------------------
     def _initURL(self, org_url=None,

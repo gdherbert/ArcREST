@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import six
+from ..packages import six
 from ..packages.six.moves import urllib_parse as urlparse
 from ..security import OAuthSecurityHandler, AGOLTokenSecurityHandler, PortalTokenSecurityHandler
 from .._abstract.abstract import BaseAGOLClass
@@ -1551,8 +1551,8 @@ class UserItem(BaseAGOLClass):
                    data=None,
                    metadata=None,
                    text=None,
-                   serviceUrl=None
-                   ):
+                   serviceUrl=None,
+                   multipart=False):
         """
         updates an item's properties using the ItemParameter class.
 
@@ -1563,6 +1563,8 @@ class UserItem(BaseAGOLClass):
            metadata - this is an xml file that contains metadata information
            text - The text content for the item to be updated.
            serviceUrl - this is a service url endpoint.
+           multipart - this is a boolean value that means the file will be
+              broken up into smaller pieces and uploaded.
         """
         thumbnail = None
         largeThumbnail = None
@@ -1607,14 +1609,28 @@ class UserItem(BaseAGOLClass):
         if metadata and os.path.isfile(metadata):
             files['metadata'] = metadata
         url = "%s/update" % self.root
-        res = self._post(url=url,
+        if multipart:
+            itemID = self.id
+            params['multipart'] = True
+            params['fileName'] = os.path.basename(data)
+            res = self._post(url=url,
+                             param_dict=params,
+                             securityHandler=self._securityHandler,
+                             proxy_url=self._proxy_url,
+                             proxy_port=self._proxy_port)
+            itemPartJSON = self.addByPart(filePath=data)
+            res = self.commit(wait=True, additionalParams=\
+                              {'type' : self.type })
+
+        else:
+            res = self._post(url=url,
                  param_dict=params,
                  files=files,
                  securityHandler=self._securityHandler,
                  proxy_url=self._proxy_url,
                  proxy_port=self._proxy_port)
         self.__init()
-        return res
+        return self
     #----------------------------------------------------------------------
     def deleteInfo(self, infoFile="metadata/metadata.xml"):
         """
@@ -1808,6 +1824,7 @@ class User(BaseAGOLClass):
     _start = None
     _num = None
     _total = None
+
     #----------------------------------------------------------------------
     def __init__(self, url,
                  securityHandler,
@@ -1982,6 +1999,7 @@ class User(BaseAGOLClass):
                             proxy_port=self._proxy_port)
 
     #----------------------------------------------------------------------
+
     @property
     def username(self):
         '''gets the property value for username'''
@@ -2606,10 +2624,10 @@ class User(BaseAGOLClass):
             params["filename"] = os.path.basename(filePath)
             params['itemType'] = 'file'
             res = self._post(url,
-                                param_dict=params,
-                                securityHandler=self._securityHandler,
-                                proxy_url=self._proxy_url,
-                                proxy_port=self._proxy_port)
+                            param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
             if 'id' in res.keys():
                 itemId = res['id']
                 iUrl = "%s/items/%s" % (self.location, itemId)
@@ -2618,12 +2636,10 @@ class User(BaseAGOLClass):
                               proxy_url=self._proxy_url,
                               proxy_port=self._proxy_port)
                 res = ui.addByPart(filePath=filePath)
-                #itemId = res['id']
                 # need to pass 'type' on commit
                 res = ui.commit(wait=True, additionalParams=\
                                   {'type' : itemParameters.type }
                                   )
-                #itemId = res['id']
                 if itemParameters is not None:
                     res = ui.updateItem(itemParameters=itemParameters)
                 return ui
@@ -2886,7 +2902,7 @@ class Group(BaseAGOLClass):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
-                print( k, " - attribute not implemented in Content.Groups class.")
+                print(k, " - attribute not implemented in Content.Groups class.")
     #----------------------------------------------------------------------
     @property
     def root(self):

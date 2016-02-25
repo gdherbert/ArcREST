@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import six
+from ..packages import six
 from ..web._base import BaseWebOperations
 _url = None
 _securityHandler = None
@@ -96,6 +96,8 @@ class search(BaseWebOperations):
               'Workflow Manager Package',
               'Web Mapping Application',
               'Web Map']
+        title = title.replace(":"," ")
+
         if username is None:
             username = self._securityHandler.username
         if searchorg == True:

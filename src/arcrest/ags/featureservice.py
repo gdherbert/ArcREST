@@ -6,7 +6,7 @@ from __future__ import print_function
 from re import search
 from .._abstract.abstract import BaseAGSServer, BaseSecurityHandler
 from ..security import security
-from . import layer
+from ..agol.services import FeatureLayer
 import json
 from ..common.geometry import SpatialReference
 from ..common.general import FeatureSet
@@ -15,6 +15,8 @@ from ..common.filters import LayerDefinitionFilter, GeometryFilter, TimeFilter
 class FeatureService(BaseAGSServer):
     """ contains information about a feature service """
     _url = None
+    _serviceItemId = None
+    _supportsApplyEditsWithGlobalIds = None
     _currentVersion = None
     _serviceDescription = None
     _hasVersionedData = None
@@ -277,10 +279,10 @@ class FeatureService(BaseAGSServer):
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         self._layers = []
-        if json_dict.has_key("layers"):
+        if 'layers' in json_dict:
             for l in json_dict["layers"]:
                 self._layers.append(
-                    layer.FeatureLayer(url=self._url + "/%s" % l['id'],
+                    FeatureLayer(url=self._url + "/%s" % l['id'],
                                        securityHandler=self._securityHandler,
                                        proxy_port=self._proxy_port,
                                        proxy_url=self._proxy_url)
@@ -313,7 +315,18 @@ class FeatureService(BaseAGSServer):
         if self._hasStaticData is None:
             self.__init()
         return self._hasStaticData
-
+    @property
+    def supportsApplyEditsWithGlobalIds(self):
+        """returns the supportsApplyEditsWithGlobalIds value"""
+        if self._supportsApplyEditsWithGlobalIds is None:
+            self.__init()
+        return self._supportsApplyEditsWithGlobalIds
+    @property
+    def serviceItemId(self):
+        """returns the serviceItemId value"""
+        if self._serviceItemId is None:
+            self.__init()
+        return self._serviceItemId
     #----------------------------------------------------------------------
     @property
     def currentVersion(self):

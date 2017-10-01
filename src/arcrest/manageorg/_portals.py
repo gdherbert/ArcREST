@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import division
 from ..security import  PortalServerSecurityHandler
 from ..manageags import AGSAdministration
 from ..hostedservice import Services
@@ -200,6 +201,11 @@ class Portal(BaseAGOLClass):
     _appInfo = None
     _creditAssignments = None
     _updateUserProfileDisabled = None
+    _analysisLayersGroupQuery = None
+    _defaultUserCreditAssignment = None
+    _analysisLayersGroupQuery = None
+    _currentVersion = None
+    _hasCategorySchema = None
     #----------------------------------------------------------------------
     def __init__(self,
                  url,
@@ -236,6 +242,7 @@ class Portal(BaseAGOLClass):
             if k in attributes:
                 setattr(self, "_"+ k, json_dict[k])
             else:
+                setattr(self, k, v)
                 print( k, " - attribute not implemented in Portal class.")
     #----------------------------------------------------------------------
     def _findPortalId(self):
@@ -251,20 +258,28 @@ class Portal(BaseAGOLClass):
                            securityHandler=self._securityHandler,
                            proxy_port=self._proxy_port,
                            proxy_url=self._proxy_url)
-        if res.has_key('id'):
+        if 'id' in res:
             return res['id']
         return None
-    ##----------------------------------------------------------------------
-    #@property
-    #def hostingServers(self):
-        #"""returns a list of servers that host non-tile based content for a
-        #site."""
-        #return
-    ##----------------------------------------------------------------------
-    #@property
-    #def tileServers(self):
-        #""""""
-        #return
+    @property
+    def analysisLayersGroupQuery(self):
+        if self._analysisLayersGroupQuery is None:
+            self.__init()
+        return self._analysisLayersGroupQuery
+    #----------------------------------------------------------------------
+    @property
+    def defaultUserCreditAssignment(self):
+        """gets the property value for defaultUserCreditAssignment"""
+        if self._defaultUserCreditAssignment is None:
+            self.__init()
+        return self._defaultUserCreditAssignment
+    #----------------------------------------------------------------------
+    @property
+    def analysisLayersGroupQueryt(self):
+        """gets the property value for analysisLayersGroupQuery"""
+        if self._analysisLayersGroupQuery is None:
+            self.__init()
+        return self._analysisLayersGroupQuery
     #----------------------------------------------------------------------
     @property
     def updateUserProfileDisabled(self):
@@ -956,6 +971,20 @@ class Portal(BaseAGOLClass):
         return self._creditAssignments
     #----------------------------------------------------------------------
     @property
+    def currentVersion(self):
+        '''gets the property value for currentVersion'''
+        if self._currentVersion is None:
+            self.__init()
+        return self._currentVersion
+    #----------------------------------------------------------------------
+    @property
+    def hasCategorySchema(self):
+        '''gets the property value for hasCategorySchema'''
+        if self._hasCategorySchema is None:
+            self.__init()
+        return self._hasCategorySchema
+    #----------------------------------------------------------------------
+    @property
     def urls(self):
         """gets the urls for a portal"""
         url = "%s/urls" % self.root
@@ -965,34 +994,40 @@ class Portal(BaseAGOLClass):
                      securityHandler=self._securityHandler,
                      proxy_url=self._proxy_url,
                      proxy_port=self._proxy_port)
-    #----------------------------------------------------------------------
+    # ---------------------------------------------------------------------
+
     @property
     def featureServers(self):
         """gets the hosting feature AGS Server"""
-        services = []
         if self.urls == {}:
             return {}
-        urls = self.urls
-        if 'https' in urls['urls']['features']:
-            res = urls['urls']['features']['https']
+
+        featuresUrls = self.urls['urls']['features']
+        if 'https' in featuresUrls:
+            res = featuresUrls['https']
+        elif 'http' in featuresUrls:
+            res = featuresUrls['http']
         else:
-            res = urls['urls']['features']['http']
-        for https in res:
+            return None
+
+        services = []
+        for urlHost in res:
             if self.isPortal:
-                url = "%s/admin" % https
-                services.append(AGSAdministration(url=url,
-                                                  securityHandler=self._securityHandler,
-                                                  proxy_url=self._proxy_url,
-                                                  proxy_port=self._proxy_port)
-                                )
+                services.append(AGSAdministration(
+                    url='%s/admin' % urlHost,
+                    securityHandler=self._securityHandler,
+                    proxy_url=self._proxy_url,
+                    proxy_port=self._proxy_port))
             else:
-                url = "https://%s/%s/ArcGIS/admin" % (https, self.portalId)
-                services.append(Services(url=url,
-                                         securityHandler=self._securityHandler,
-                                         proxy_url=self._proxy_url,
-                                         proxy_port=self._proxy_port))
+                services.append(Services(
+                    url='https://%s/%s/ArcGIS/admin' % (urlHost, self.portalId),
+                    securityHandler=self._securityHandler,
+                    proxy_url=self._proxy_url,
+                    proxy_port=self._proxy_port))
+
         return services
-    #----------------------------------------------------------------------
+    # ---------------------------------------------------------------------
+
     @property
     def tileServers(self):
         """
@@ -1099,6 +1134,9 @@ class Portal(BaseAGOLClass):
         }
         if isinstance(updatePortalParameters, parameters.PortalParameters):
             params.update(updatePortalParameters.value)
+        elif isinstance(updatePortalParameters, dict):
+            for k,v in updatePortalParameters.items():
+                params[k] = v
         else:
             raise AttributeError("updatePortalParameters must be of type parameter.PortalParameters")
         return self._post(url=url,
@@ -1276,7 +1314,14 @@ class Portal(BaseAGOLClass):
 
         if "users" in res:
             if len(res['users']) > 0:
-                cURL = "https://%s/sharing/rest/community" % self.portalHostname
+                parsed = urlparse.urlparse(self._url)
+                if parsed.netloc.lower().find('arcgis.com') == -1:
+                    cURL = "%s://%s/%s/sharing/rest/community" % (parsed.scheme,
+                                                                  parsed.netloc,
+                                                                  parsed.path[1:].split('/')[0])
+                else:
+                    cURL = "%s://%s/sharing/rest/community" % (parsed.scheme,
+                                                               parsed.netloc)
                 com = Community(url=cURL,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
@@ -1567,28 +1612,37 @@ class Portal(BaseAGOLClass):
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
-    def usage(self,
-              startTime,
-              endTime,
-              vars,
-              period="1d",
-              groupby=None
-              ):
+    def usage(self, startTime, endTime, vars=None, period=None,
+              groupby=None, name=None, stype=None, etype=None,
+              appId=None, deviceId=None, username=None, appOrgId=None,
+              userOrgId=None, hostOrgId=None):
         """
         returns the usage statistics value
         """
+
         url = self.root + "/usage"
-        startTime = int(local_time_to_online(dt=startTime)/ 1000)
-        endTime = int(local_time_to_online(dt=endTime) /1000)
+        startTime = str(int(local_time_to_online(dt=startTime)))
+        endTime = str(int(local_time_to_online(dt=endTime)))
+
         params = {
-            "f" : "json",
-            "vars" : vars,
-            "startTime" : "%s000" % startTime,
-            "endTime" : "%s000" % endTime,
-            "period" : period
-        }
-        if not groupby is None:
-            params['groupby'] = groupby
+                    'f' : 'json',
+                    'startTime' : startTime,
+                    'endTime' : endTime,
+                    'vars' : vars,
+                    'period' : period,
+                    'groupby' : groupby,
+                    'name' : name,
+                    'stype' : stype,
+                    'etype' : etype,
+                    'appId' : appId,
+                    'deviceId' : deviceId,
+                    'username' : username,
+                    'appOrgId' : appOrgId,
+                    'userOrgId' : userOrgId,
+                    'hostOrgId' : hostOrgId,
+                 }
+
+        params = {key:item for key,item in params.items() if item is not None}
         return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,

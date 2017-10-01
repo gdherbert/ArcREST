@@ -1,6 +1,9 @@
-# ArcREST Version 3.5.4
+# This repository is no longer being maintained.  Please use the ArcGIS Python API.
+# Site: https://github.com/Esri/arcgis-python-api
 
-A latest release(v3.5.3) of ArcREST can be downloaded here: https://github.com/Esri/ArcREST/releases/tag/3.5.3
+# ArcREST Version 3.5.x
+
+A latest release(v3.5.9) of ArcREST can be downloaded here: https://github.com/Esri/ArcREST/releases/tag/3.5.9
 * If you are using an older version(v3.0.1) of ArcRest, you can find it here: https://github.com/Esri/ArcREST/releases/tag/v3.0.1
 * If you are using an older version(v2) of ArcRest, you can find it here: https://github.com/Esri/ArcREST/tree/FinalV2
 * If you are using an older version(v1) of ArcRest, you can find it here: https://github.com/Esri/ArcREST/tree/October2014v1.0Final
@@ -20,6 +23,7 @@ This is not a full implementation of the Esri REST API, but we would like to mak
 
 ## Documentation
  The API reference is [hosted here](http://esri.github.io/ArcREST/index.html).
+ The Esri portal API reference is [hosted here](http://resources.arcgis.com/en/help/arcgis-rest-api)
 
 ### General Help
 
@@ -35,11 +39,23 @@ This is not a full implementation of the Esri REST API, but we would like to mak
 ## Recommended Installation
 
 * ArcPy (optional)
-* ArcGIS Desktop 10.2.x, 10.3.x (optional)
+* ArcGIS Desktop 10.2, 10.3, 10.4, 10.5 (optional)
   - If ArcPy is not installed, there will be limited functionality.
 
 ## Installation
 
+### Download from PyPi using pip
+
+```pip install arcrest_package```
+
+### Download a geoprocessing package to install ArcREST!
+	Download the GeoProcessing Package here: https://github.com/Esri/ArcREST/blob/master/ArcGIS%20Desktop%20Installer/installing_arcrest.gpk
+	* Note: ArcMap/Catalog is required to use the gpk format.
+	* Note: this tools can be used to update ArcREST as well
+    1. Open the GPK in the ArcGIS Desktop Product of your choosing.
+	2. Run the tool by double clicking on the tool icon.
+	3. Test the import
+	
 * Note:  If you have not done so, you may need to add your python install path and scripts folder to your environment variables.  In your system PATH environment variable, add both the path to Python and the Python Scripts folder. ex: C:\Python27\ArcGIS10.3;C:\Python27\ArcGIS10.3\Scripts
 
 1. Install requirements
@@ -87,6 +103,8 @@ Please see our [guidelines for contributing](https://github.com/esri/contributin
 
 Please see our [PyPi page](https://pypi.python.org/pypi/ArcREST_Package).
 
+To build the wheel - python setup_wheel.py bdist_wheel
+
 ## Licensing
 
 Copyright 2016 Esri
@@ -108,3 +126,4 @@ A copy of the license is available in the repository's
 
 [](Esri Tags: AGS AGOL ArcGIS Server ArcGIS Online Utilities Telecommunications ArcGISSolutions)
 [](Esri Language: Python)
+

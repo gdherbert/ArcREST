@@ -1,14 +1,15 @@
 from __future__ import print_function
+from __future__ import absolute_import
+
 
 from arcrest import security
 import arcrest
 from arcrest.manageags import AGSAdministration
 from arcrest.manageorg import Administration
-from packages import six
-import packages.six.moves.urllib as urllib
-from packages.six.moves.urllib.error import HTTPError
+from .packages import six
+from .packages.six.moves.urllib.error import HTTPError
 import os
-import common
+from . import common
 import copy
 
 ########################################################################
@@ -17,10 +18,20 @@ def lineno():
     return inspect.currentframe().f_back.f_lineno
 #----------------------------------------------------------------------
 def trace():
-    """
-        trace finds the line, the filename
-        and error message and returns it
-        to the user
+    """Determines information about where an error was thrown.
+
+    Returns:
+        tuple: line number, filename, error message
+    Examples:
+        >>> try:
+        ...     1/0
+        ... except:
+        ...     print("Error on '{}'\\nin file '{}'\\nwith error '{}'".format(*trace()))
+        ...
+        Error on 'line 1234'
+        in file 'C:\\foo\\baz.py'
+        with error 'ZeroDivisionError: integer division or modulo by zero'
+
     """
     import traceback, inspect, sys
     tb = sys.exc_info()[2]
@@ -34,11 +45,49 @@ def trace():
     return line, filename, synerror
 
 class securityhandlerhelper(object):
-    """
-        A number of different security handlers are suppoted by ArcGIS, this
-        function simplifies the creation of the handlers.  A dict with the
-        type of handler and information to created it is required to generate
-        the handlers
+    """A number of different security handlers are suppoted by ArcGIS; this
+    function simplifies the creation of the handlers.
+
+    Args:
+        securityinfo (dict): A ``dict`` with the type of handler and
+            information to be created.
+
+    +-----------------+-------------------------------+-------------------------+
+    |       Key       |          Description          |       Required?         |
+    +-----------------+-------------------------------+-------------------------+
+    | security_type   | security type used to connect | See Values *            |
+    +-----------------+-------------------------------+-------------------------+
+    | username        | username for log in           | ``LDAP|NTLM`` **        |
+    +-----------------+-------------------------------+-------------------------+
+    | password        | password for log in           | ``LDAP|NTLM`` **        |
+    +-----------------+-------------------------------+-------------------------+
+    | proxy_url       | url for proxy server          | Optional                |
+    +-----------------+-------------------------------+-------------------------+
+    | proxy_port      | port for proxy server         | Optional                |
+    +-----------------+-------------------------------+-------------------------+
+    | token_url       | url for token server          | Optional                |
+    +-----------------+-------------------------------+-------------------------+
+    | referer_url     | url for referer               | Optional                |
+    +-----------------+-------------------------------+-------------------------+
+    | certificatefile |                               | ``PKI``                 |
+    +-----------------+-------------------------------+-------------------------+
+    | keyfile         |                               | ``PKI``                 |
+    +-----------------+-------------------------------+-------------------------+
+    | client_id       |                               | ``OAuth``               |
+    +-----------------+-------------------------------+-------------------------+
+    | secret_id       |                               | ``OAuth``               |
+    +-----------------+-------------------------------+-------------------------+
+    | \* Values: ``ArcGIS|Portal|LDAP|NTLM|PKI|OAuth`` (defaults to ``Portal``) |
+    +-----------------+-------------------------------+-------------------------+
+    | \*\* Also required for ``ArcGIS|Portal`` unless using anonymous logins    |
+    +-----------------+-------------------------------+-------------------------+
+
+    Examples:
+        >>> securityinfo = {'username' : 'secret', 'password' : 'really_secret'}
+        >>> shh = arcresthelper.securityhandlerhelper.securityhandlerhelper(securityinfo)
+        >>> print(shh._org_url)
+        http://myorg.maps.arcgis.com
+
     """
     _org_url = None
     _username = None
@@ -55,35 +104,13 @@ class securityhandlerhelper(object):
     _client_id = None
     _secret_id = None
     _is_portal = False
-    _supported_types = ['LDAP', 'NTLM', 'OAuth', 'Portal', 'PKI', "ArcGIS"]
+    _supported_types = ['LDAP', 'NTLM', 'OAuth', 'Portal', 'PKI', "ArcGIS", "AGS"]
+    _valid = None
+    _message = None
 
     #----------------------------------------------------------------------
     def __init__(self, securityinfo):
-
-        """Constructor
-            A number of different security handlers are suppoted by ArcGIS, this
-            function simplifies the creation of the handlers.  A dict with the
-            type of handler and information to created it is required to generate
-            the handlers
-
-           Inputs:
-              securityinfo - The dict with details to create the handler.  The
-                        valid parameters are:
-                            - security_type: Required, valid values are Portal,
-                                NTLM, PKI, OAUTH, LDAP
-                            - proxy_url: Optional, url for proxy server
-                            - proxy_port: Optional, port for proxy server
-                            - referer_url: Optional, url for referer
-                            - token_url: Optional, url for token server
-                            - username: Optional, Username for log in, not
-                                required for all security types
-                            - password: Optional, Password for log in, not
-                                required for all security types
-                            - certificatefile: Only required for PKI
-                            - keyfile: Only required for PKI
-                            - client_id: Only required for OAuth
-                            - secret_id: Only required for OAuth
-        """
+        """Constructor"""
         try:
             if not securityinfo is None:
                 if isinstance(securityinfo,securityhandlerhelper):
@@ -234,7 +261,7 @@ class securityhandlerhelper(object):
                                                                             proxy_port=self._proxy_port,
                                                                             referer_url=self._referer_url)
                         self._message = "PKI security handler created"
-                elif str(securityinfo['security_type']).upper() == 'OAUTH'.upper():
+                elif str(self._security_type).upper() == 'OAUTH'.upper():
                     if self._secret_id is None or self._secret_id == '' or \
                         self._client_id is None or self._client_id == '':
                         self._message = "client_id and secret_id required for OAUTH"
@@ -247,11 +274,22 @@ class securityhandlerhelper(object):
                                                                              proxy_port=self._proxy_port)
 
                         self._message = "OAuth security handler created"
+                elif str(self._security_type).upper() == 'AGS'.upper():
+                    if self._username is None or self._username == '' or \
+                       self._password is None or self._password == '':
+                        self._message = "Username and password required for ArcGIS"
+                        self._valid = False
+                    else:
+                        self._securityHandler = security.AGSTokenSecurityHandler(username=self._username,
+                                                                                 password=self._password,
+                                                                                 org_url=self._org_url,
+                                                                                 proxy_url=self._proxy_url,
+                                                                                 proxy_port=self._proxy_port)
+                        self._message = "AGS security handler created"
                 else:
                     print ("No valid security type set")
                     self._message = "No valid security type set"
-                if self._securityHandler is not None:
-
+                if self._securityHandler is not None and str(self._security_type).upper() != 'AGS'.upper():
                     admin = Administration(url=self._org_url,
                                            securityHandler=self._securityHandler)
 
@@ -311,6 +349,12 @@ class securityhandlerhelper(object):
                 self._valid = True
         except ValueError as e:
             raise e
+        except six.moves.urllib.error.URLError as e:
+            line, filename, synerror = trace()
+            errorMessage = "Error making the connection to the ArcGIS Organization, this is likely due to a password or user name issue.  \
+                User names in ArcRest, unlike using a browser, are case sensitive.\n\t{}".format(synerror)
+            raise ValueError(errorMessage)
+
         except Exception as e:
 
             line, filename, synerror = trace()
@@ -323,6 +367,7 @@ class securityhandlerhelper(object):
 
     #----------------------------------------------------------------------
     def dispose(self):
+        """Disposes the :py:class:`securityhandlerhelper` object."""
         self._username = None
         self._password = None
         self._org_url = None
@@ -345,27 +390,42 @@ class securityhandlerhelper(object):
     #----------------------------------------------------------------------
     @property
     def message(self):
-        """ returns any messages """
+        """
+        Returns:
+            str: Any messages generated by the object.
+        """
         return self._message
     #----------------------------------------------------------------------
     @message.setter
     def message(self,message):
-        """ returns any messages """
+        """
+        Returns:
+            str: Any messages generated by the object.
+        """
         self._message = message
     #----------------------------------------------------------------------
     @property
     def valid(self):
-        """ returns boolean wether handler is valid """
+        """
+        Returns:
+            bool: ``True`` if the object is valid, ``False`` otherwise.
+        """
         return self._valid
     #----------------------------------------------------------------------
     @valid.setter
     def valid(self,valid):
-        """ returns boolean wether handler is valid """
+        """
+        Returns:
+            bool: ``True`` if the object is valid, ``False`` otherwise.
+        """
         self._valid = valid
     #----------------------------------------------------------------------
     @property
     def securityhandler(self):
-        """ returns the security hanlder """
+        """
+        Returns:
+            securityhandlerhelper: The security handler object.
+        """
         return self._securityHandler
     #@property
     #def is_portal(self):

@@ -15,7 +15,7 @@ def trace():
         and error message and returns it
         to the user
     """
-    import traceback, inspect
+    import traceback, inspect, sys
     tb = sys.exc_info()[2]
     tbinfo = traceback.format_tb(tb)[0]
     filename = inspect.getfile(inspect.currentframe())
@@ -55,7 +55,7 @@ def main():
             rst.removeUserGroups(users=users)
         else:
             print (rst.message)
-    except (common.ArcRestHelperError),e:
+    except (common.ArcRestHelperError) as e:
         print ("error in function: %s" % e[0]['function'])
         print ("error on line: %s" % e[0]['line'])
         print ("error in file name: %s" % e[0]['filename'])

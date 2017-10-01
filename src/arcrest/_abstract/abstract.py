@@ -5,6 +5,7 @@ import calendar
 import glob
 import mimetypes
 import os
+from ..packages import six
 from ..packages.six.moves import http_client as httplib
 from ..web._base import BaseWebOperations
 
@@ -41,6 +42,22 @@ class BaseGPObject(object):
     _value = None
     _paramName = None
     _dataType = None
+    # ----------------------------------------------------------------------
+    @property
+    def dataType(self):
+        """returns the data type"""
+        return self._dataType
+    # ----------------------------------------------------------------------
+    @property
+    def paramName(self):
+        """gets/set the parameter name"""
+        return self._paramName
+    # ----------------------------------------------------------------------
+    @paramName.setter
+    def paramName(self, value):
+        """gets/set the parameter name"""
+        if isinstance(value, basestring):
+            self._paramName = value
 ########################################################################
 class BaseDomain(object):
     """ all domain values inherit this class """
@@ -147,8 +164,12 @@ class BaseAGSServer(BaseWebOperations):
             return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._unicode_convert(element) for element in obj]
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, str):
+            return obj 
+        elif isinstance(obj, six.text_type):
             return obj.encode('utf-8')
+        elif isinstance(obj, six.integer_types):
+            return obj
         else:
             return obj
 # This function is a workaround to deal with what's typically described as a
@@ -267,7 +288,11 @@ class BaseAGOLClass(BaseWebOperations):
             return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._unicode_convert(element) for element in obj]
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, str):
+            return obj 
+        elif isinstance(obj, six.text_type):
             return obj.encode('utf-8')
+        elif isinstance(obj, six.integer_types):
+            return obj
         else:
             return obj
